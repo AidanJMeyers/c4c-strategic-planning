@@ -217,9 +217,11 @@
     <div class="eyebrow">Counselors for Change</div>
     <h1>Strategic Planning<br>Feedback Log</h1>
     <p>Enter the access word Aidan shared with the board to open the feedback log.</p>
-    <label for="gateInput">Access word</label>
-    <input id="gateInput" type="password" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="one word">
-    <div class="row"><button id="gateBtn" type="button">Enter</button></div>
+    <form id="gateForm" autocomplete="off">
+      <label for="gateInput">Access word</label>
+      <input id="gateInput" type="password" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="one word">
+      <div class="row"><button id="gateBtn" type="submit">Enter</button></div>
+    </form>
     <div class="err" id="gateErr" aria-live="polite"></div>
   </div>
 </div>
@@ -306,7 +308,22 @@
 
   // ---------- passphrase gate ----------
   const GATE_KEY = 'c4c_gate_ok';
-  function openApp() { gateEl.hidden = true; appEl.hidden = false; boot(); }
+  let booted = false;
+  function openApp() {
+    gateEl.hidden = true; appEl.hidden = false;
+    if (booted) return; booted = true;
+    try {
+      boot();
+    } catch (e) {
+      console.error('C4C boot failed:', e);
+      cfgErrEl.hidden = false;
+      cfgErrEl.innerHTML = '<strong>The board loaded but hit an error.</strong> ' +
+        esc(String((e && e.message) || e)) +
+        ' — try a hard refresh (Ctrl+Shift+R). If it keeps happening, send Aidan this exact message.';
+    }
+  }
+  // esc is needed by the fallback above before boot() defines its own; keep a tiny local copy.
+  function esc(s){ return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 
   if (sessionStorage.getItem(GATE_KEY) === '1') {
     openApp();
@@ -316,14 +333,17 @@
     const err = document.getElementById('gateErr');
     input.focus();
     const tryGate = () => {
-      if (input.value.trim().toLowerCase() === String(CFG.PASSPHRASE).trim().toLowerCase()) {
+      const typed = input.value.trim().toLowerCase();
+      const want = String(CFG.PASSPHRASE == null ? '' : CFG.PASSPHRASE).trim().toLowerCase();
+      if (typed && typed === want) {
         sessionStorage.setItem(GATE_KEY, '1'); err.textContent = ''; openApp();
       } else {
         err.textContent = 'That word does not match. Check with Aidan.'; input.select();
       }
     };
-    document.getElementById('gateBtn').onclick = tryGate;
-    input.addEventListener('keydown', e => { if (e.key === 'Enter') tryGate(); });
+    // One code path for both the Enter key and the button (button is type=submit,
+    // so a click and a keypress both raise the form's submit event exactly once).
+    document.getElementById('gateForm').addEventListener('submit', e => { e.preventDefault(); tryGate(); });
   }
 
   // ============================================================
